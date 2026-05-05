@@ -1,0 +1,550 @@
+import javax.swing.*;
+import javax.swing.border.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.*;
+import java.io.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+
+public class TicTacToe extends JFrame {
+
+    
+    private static final Color BG_DARK       = new Color(15, 15, 25);
+    private static final Color BG_CARD       = new Color(25, 25, 40);
+    private static final Color BG_BOARD      = new Color(20, 20, 35);
+    private static final Color COLOR_X       = new Color(99, 221, 183);   
+    private static final Color COLOR_O       = new Color(255, 107, 107);  
+    private static final Color COLOR_ACCENT  = new Color(123, 97, 255);   
+    private static final Color COLOR_TEXT    = new Color(230, 230, 245);
+    private static final Color COLOR_MUTED   = new Color(100, 100, 130);
+    private static final Color COLOR_WIN_BG  = new Color(50, 35, 80);
+    private static final Color COLOR_BTN_BG  = new Color(35, 35, 55);
+    private static final Color COLOR_BTN_HOV = new Color(50, 50, 75);
+
+
+    private final GameButton[] boardButtons = new GameButton[9];
+    private final JLabel statusLabel   = new JLabel("", SwingConstants.CENTER);
+    private final JLabel scoreLabel    = new JLabel("", SwingConstants.CENTER);
+    private final JLabel player1Label  = new JLabel("", SwingConstants.CENTER);
+    private final JLabel player2Label  = new JLabel("", SwingConstants.CENTER);
+    private final JPanel boardPanel    = new JPanel(new GridLayout(3, 3, 8, 8));
+    private int[] winningCombo = null;
+
+    
+    private Player player1, player2, currentPlayer;
+    private Board gameBoard;
+    private boolean gameActive = true;
+
+    public TicTacToe() {
+        if (!showLoginDialog()) System.exit(0);
+        if (!setupGame())      System.exit(0);
+
+        setTitle("Tic-Tac-Toe  ✦  by Syed Nahiyan");
+        setSize(520, 680);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
+
+    
+        JMenuBar menuBar = new JMenuBar();
+        menuBar.setBackground(BG_CARD);
+        menuBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, COLOR_ACCENT));
+        JMenu gameMenu = new JMenu("☰  Game");
+        gameMenu.setForeground(COLOR_TEXT);
+        styleMenuItem(gameMenu);
+        JMenuItem newGameItem  = createMenuItem("⟳  New Game",    e -> startNewGame());
+        JMenuItem historyItem  = createMenuItem("📜  View History", e -> showHistoryDialog());
+        JMenuItem exitItem     = createMenuItem("✕  Exit",         e -> System.exit(0));
+        gameMenu.add(newGameItem);
+        gameMenu.add(historyItem);
+        gameMenu.add(new JSeparator());
+        gameMenu.add(exitItem);
+        menuBar.add(gameMenu);
+        setJMenuBar(menuBar);
+
+    
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 0));
+        mainPanel.setBackground(BG_DARK);
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+
+        JLabel titleLabel = new JLabel("TIC-TAC-TOE", SwingConstants.CENTER);
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 26));
+        titleLabel.setForeground(COLOR_ACCENT);
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+
+
+        JPanel scorePanel = new JPanel(new GridLayout(1, 3, 10, 0));
+        scorePanel.setBackground(BG_DARK);
+        scorePanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 16, 0));
+
+        JPanel p1Panel = buildPlayerCard(player1Label, "P1", COLOR_X);
+        JPanel vsPanel = buildVSCard();
+        JPanel p2Panel = buildPlayerCard(player2Label, "P2", COLOR_O);
+        scorePanel.add(p1Panel);
+        scorePanel.add(vsPanel);
+        scorePanel.add(p2Panel);
+
+
+        statusLabel.setFont(new Font("SansSerif", Font.BOLD, 15));
+        statusLabel.setForeground(COLOR_TEXT);
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
+
+
+        boardPanel.setBackground(BG_DARK);
+        boardPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        for (int i = 0; i < 9; i++) {
+            boardButtons[i] = new GameButton();
+            final int idx = i;
+            boardButtons[i].addActionListener(e -> onBoardButtonClick(idx));
+            boardPanel.add(boardButtons[i]);
+        }
+
+    
+        JButton newGameBtn = new JButton("New Game");
+        newGameBtn.setFont(new Font("SansSerif", Font.BOLD, 13));
+        newGameBtn.setForeground(COLOR_TEXT);
+        newGameBtn.setBackground(COLOR_ACCENT);
+        newGameBtn.setFocusPainted(false);
+        newGameBtn.setBorderPainted(false);
+        newGameBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        newGameBtn.setBorder(BorderFactory.createEmptyBorder(10, 30, 10, 30));
+        newGameBtn.addActionListener(e -> startNewGame());
+        newGameBtn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { newGameBtn.setBackground(new Color(100, 75, 210)); }
+            public void mouseExited(MouseEvent e)  { newGameBtn.setBackground(COLOR_ACCENT); }
+        });
+
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        bottomPanel.setBackground(BG_DARK);
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(14, 0, 0, 0));
+        bottomPanel.add(newGameBtn);
+
+        JPanel topSection = new JPanel(new BorderLayout());
+        topSection.setBackground(BG_DARK);
+        topSection.add(titleLabel, BorderLayout.NORTH);
+        topSection.add(scorePanel, BorderLayout.CENTER);
+        topSection.add(statusLabel, BorderLayout.SOUTH);
+
+        mainPanel.add(topSection, BorderLayout.NORTH);
+        mainPanel.add(boardPanel, BorderLayout.CENTER);
+        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
+
+        setContentPane(mainPanel);
+
+        gameBoard   = new Board();
+        currentPlayer = player1;
+        updateStatus();
+        setVisible(true);
+    }
+
+    class GameButton extends JButton {
+        private char symbol = '_';
+        private boolean highlight = false;
+        private boolean hovered = false;
+
+        GameButton() {
+            setOpaque(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setFocusPainted(false);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setPreferredSize(new Dimension(130, 130));
+
+            addMouseListener(new MouseAdapter() {
+                public void mouseEntered(MouseEvent e) { hovered = true;  repaint(); }
+                public void mouseExited(MouseEvent e)  { hovered = false; repaint(); }
+            });
+        }
+
+        void setSymbol(char s) { this.symbol = s; repaint(); }
+        void setHighlight(boolean h) { this.highlight = h; repaint(); }
+        void reset() { symbol = '_'; highlight = false; hovered = false; setEnabled(true); repaint(); }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int w = getWidth(), h = getHeight();
+            int arc = 18;
+
+            
+            Color bg = highlight ? COLOR_WIN_BG : (hovered && symbol == '_') ? COLOR_BTN_HOV : COLOR_BTN_BG;
+            g2.setColor(bg);
+            g2.fillRoundRect(0, 0, w, h, arc, arc);
+
+            
+            Color borderColor = highlight ? COLOR_ACCENT : (hovered && symbol == '_') ? COLOR_ACCENT : new Color(50, 50, 75);
+            g2.setColor(borderColor);
+            g2.setStroke(new BasicStroke(highlight ? 2.5f : 1.5f));
+            g2.drawRoundRect(1, 1, w - 2, h - 2, arc, arc);
+
+            
+            int pad = 28;
+            if (symbol == 'X') {
+                g2.setColor(COLOR_X);
+                g2.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(pad, pad, w - pad, h - pad);
+                g2.drawLine(w - pad, pad, pad, h - pad);
+            } else if (symbol == 'O') {
+                g2.setColor(COLOR_O);
+                g2.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawOval(pad, pad, w - pad * 2, h - pad * 2);
+            }
+
+            g2.dispose();
+        }
+    }
+
+    
+
+    private JPanel buildPlayerCard(JLabel lbl, String side, Color color) {
+        JPanel p = new JPanel(new BorderLayout(0, 4));
+        p.setBackground(BG_CARD);
+        p.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(new Color(50, 50, 70), 1, true),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 13));
+        lbl.setForeground(color);
+        lbl.setHorizontalAlignment(SwingConstants.CENTER);
+
+    
+        if (color == COLOR_X) player1Label.setText(player1.getName() + "\n0");
+        else                   player2Label.setText(player2.getName() + "\n0");
+
+        p.add(lbl, BorderLayout.CENTER);
+        return p;
+    }
+
+    private JPanel buildVSCard() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(BG_DARK);
+        JLabel vs = new JLabel("VS", SwingConstants.CENTER);
+        vs.setFont(new Font("SansSerif", Font.BOLD, 18));
+        vs.setForeground(COLOR_MUTED);
+        p.add(vs, BorderLayout.CENTER);
+        return p;
+    }
+
+
+
+    private JMenuItem createMenuItem(String text, ActionListener al) {
+        JMenuItem item = new JMenuItem(text);
+        item.setBackground(BG_CARD);
+        item.setForeground(COLOR_TEXT);
+        item.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        item.addActionListener(al);
+        return item;
+    }
+
+    private void styleMenuItem(JMenu menu) {
+        menu.setFont(new Font("SansSerif", Font.BOLD, 14));
+        menu.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+    }
+
+    
+
+    private void onBoardButtonClick(int index) {
+        if (!gameActive || !gameBoard.isMoveValid(index)) return;
+        placeMoveOnBoard(index, currentPlayer.getSymbol());
+        if (checkGameState()) return;
+        switchPlayer();
+        if (currentPlayer instanceof ComputerPlayer && gameActive) {
+            disableBoard();
+            new SwingWorker<Integer, Void>() {
+                @Override protected Integer doInBackground() throws Exception {
+                    Thread.sleep(600); return currentPlayer.makeMove(gameBoard);
+                }
+                @Override protected void done() {
+                    try {
+                        int move = get();
+                        placeMoveOnBoard(move, currentPlayer.getSymbol());
+                        if (checkGameState()) return;
+                        switchPlayer();
+                        enableBoard();
+                    } catch (Exception e) { e.printStackTrace(); }
+                }
+            }.execute();
+        }
+    }
+
+    private void disableBoard() {
+        for (GameButton b : boardButtons) b.setEnabled(false);
+    }
+
+    private void enableBoard() {
+        for (int i = 0; i < 9; i++)
+            if (gameBoard.isMoveValid(i)) boardButtons[i].setEnabled(true);
+    }
+
+    private void placeMoveOnBoard(int index, char symbol) {
+        gameBoard.placeMove(index, symbol);
+        boardButtons[index].setSymbol(symbol);
+        boardButtons[index].setEnabled(false);
+    }
+
+    private void switchPlayer() {
+        currentPlayer = (currentPlayer == player1) ? player2 : player1;
+        updateStatus();
+    }
+
+    private boolean checkGameState() {
+        winningCombo = gameBoard.getWinningCombo(currentPlayer.getSymbol());
+        if (winningCombo != null) {
+            for (int idx : winningCombo) boardButtons[idx].setHighlight(true);
+            statusLabel.setText("🎉  " + currentPlayer.getName() + " Wins!");
+            statusLabel.setForeground(currentPlayer.getSymbol() == 'X' ? COLOR_X : COLOR_O);
+            currentPlayer.incrementScore();
+            endGame(currentPlayer.getName());
+            return true;
+        } else if (gameBoard.isFull()) {
+            statusLabel.setText("🤝  It's a Draw!");
+            statusLabel.setForeground(COLOR_MUTED);
+            endGame("Draw");
+            return true;
+        }
+        return false;
+    }
+
+    private void endGame(String winner) {
+        gameActive = false;
+        FileHandler.logGameHistory(player1.getName(), player2.getName(), winner);
+        saveScores();
+        updateScoreLabels();
+        Timer t = new Timer(800, e -> {
+            JOptionPane.showMessageDialog(this, statusLabel.getText(), "Game Over", JOptionPane.PLAIN_MESSAGE);
+        });
+        t.setRepeats(false);
+        t.start();
+    }
+
+    private void startNewGame() {
+        gameBoard = new Board();
+        gameActive = true;
+        winningCombo = null;
+        currentPlayer = player1;
+        for (GameButton b : boardButtons) b.reset();
+        statusLabel.setForeground(COLOR_TEXT);
+        updateStatus();
+    }
+
+    private void updateStatus() {
+        String sym = "(" + currentPlayer.getSymbol() + ")";
+        statusLabel.setText(currentPlayer.getName() + "'s Turn  " + sym);
+        statusLabel.setForeground(currentPlayer.getSymbol() == 'X' ? COLOR_X : COLOR_O);
+        updateScoreLabels();
+    }
+
+    private void updateScoreLabels() {
+        player1Label.setText("<html><center>" + player1.getName() + "<br><b style='font-size:18px'>" + player1.getScore() + "</b></center></html>");
+        player2Label.setText("<html><center>" + player2.getName() + "<br><b style='font-size:18px'>" + player2.getScore() + "</b></center></html>");
+    }
+
+    
+
+    private boolean showLoginDialog() {
+        JPanel panel = new JPanel(new GridLayout(2, 2, 8, 8));
+        panel.setBackground(BG_CARD);
+        JTextField usernameField = new JTextField();
+        JPasswordField passwordField = new JPasswordField();
+        styleField(usernameField);
+        styleField(passwordField);
+        JLabel uLbl = new JLabel("Username:"); uLbl.setForeground(COLOR_TEXT);
+        JLabel pLbl = new JLabel("Password:"); pLbl.setForeground(COLOR_TEXT);
+        panel.add(uLbl); panel.add(usernameField);
+        panel.add(pLbl); panel.add(passwordField);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "🔐  Login", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            if (usernameField.getText().equals("admin") && new String(passwordField.getPassword()).equals("1234"))
+                return true;
+            JOptionPane.showMessageDialog(null, "❌  Login Failed! Wrong credentials.", "Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        return false;
+    }
+
+    private boolean setupGame() {
+        Map<String, Integer> loadedScores = FileHandler.loadScores();
+
+        String p1Name = JOptionPane.showInputDialog(this, "Enter Your Name (Player 1):", "👤  Player 1 Setup", JOptionPane.PLAIN_MESSAGE);
+        if (p1Name == null || p1Name.trim().isEmpty()) return false;
+        player1 = new HumanPlayer(p1Name.trim(), 'X');
+        player1.setScore(loadedScores.getOrDefault(player1.getName(), 0));
+
+        String[] modes = {"🤖  Player vs Computer", "👥  Player vs Player"};
+        int mode = JOptionPane.showOptionDialog(this, "Choose Game Mode", "⚙  Game Mode",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, modes, modes[0]);
+
+        if (mode == 0) {
+            String[] levels = {"😊  Easy", "😈  Hard"};
+            int lvl = JOptionPane.showOptionDialog(this, "Choose Difficulty", "🎯  Difficulty",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, levels, levels[0]);
+            player2 = new ComputerPlayer('O', lvl == 0 ? 1 : 2);
+        } else if (mode == 1) {
+            String p2Name = JOptionPane.showInputDialog(this, "Enter Player 2's Name:", "👤  Player 2 Setup", JOptionPane.PLAIN_MESSAGE);
+            if (p2Name == null || p2Name.trim().isEmpty()) return false;
+            player2 = new HumanPlayer(p2Name.trim(), 'O');
+        } else return false;
+
+        player2.setScore(loadedScores.getOrDefault(player2.getName(), 0));
+        return true;
+    }
+
+    private void styleField(JTextField f) {
+        f.setBackground(BG_DARK);
+        f.setForeground(COLOR_TEXT);
+        f.setCaretColor(COLOR_TEXT);
+        f.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(COLOR_ACCENT, 1),
+            BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        ));
+    }
+
+    private void showHistoryDialog() {
+        JTextArea area = new JTextArea(15, 45);
+        area.setText(FileHandler.getHistory());
+        area.setEditable(false);
+        area.setBackground(BG_CARD);
+        area.setForeground(COLOR_TEXT);
+        area.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        JScrollPane sp = new JScrollPane(area);
+        sp.getViewport().setBackground(BG_CARD);
+        JOptionPane.showMessageDialog(this, sp, "📜  Game History", JOptionPane.PLAIN_MESSAGE);
+    }
+
+    private void saveScores() {
+        Map<String, Integer> all = FileHandler.loadScores();
+        all.put(player1.getName(), player1.getScore());
+        all.put(player2.getName(), player2.getScore());
+        FileHandler.saveScores(all);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(TicTacToe::new);
+    }
+}
+
+
+
+class Board {
+    private final char[] board = new char[9];
+    private static final int[][] LINES = {
+        {0,1,2},{3,4,5},{6,7,8},
+        {0,3,6},{1,4,7},{2,5,8},
+        {0,4,8},{2,4,6}
+    };
+
+    public Board() { for (int i = 0; i < 9; i++) board[i] = '_'; }
+    public boolean isMoveValid(int i) { return i >= 0 && i < 9 && board[i] == '_'; }
+    public void placeMove(int i, char s) { if (isMoveValid(i)) board[i] = s; }
+    public boolean isFull() { for (char c : board) if (c == '_') return false; return true; }
+
+    public boolean checkWinner(char s) { return getWinningCombo(s) != null; }
+
+    public int[] getWinningCombo(char s) {
+        for (int[] line : LINES)
+            if (board[line[0]] == s && board[line[1]] == s && board[line[2]] == s)
+                return line;
+        return null;
+    }
+
+    public char[] getBoardState() { return board.clone(); }
+}
+
+
+abstract class Player {
+    protected String name; protected char symbol; protected int score;
+    public Player(String n, char s) { name = n; symbol = s; score = 0; }
+    public String getName()    { return name; }
+    public char   getSymbol()  { return symbol; }
+    public int    getScore()   { return score; }
+    public void   setScore(int s) { score = s; }
+    public void   incrementScore() { score++; }
+    public abstract int makeMove(Board board);
+}
+
+class HumanPlayer extends Player {
+    public HumanPlayer(String n, char s) { super(n, s); }
+    @Override public int makeMove(Board b) { return -1; }
+}
+
+class ComputerPlayer extends Player {
+    private final Random random = new Random();
+    private final int level;
+    public ComputerPlayer(char s, int lvl) { super("Computer", s); level = lvl; }
+
+    @Override public int makeMove(Board board) {
+        if (level == 2) { int m = findBestMove(board); if (m != -1) return m; }
+        return findRandomMove(board);
+    }
+    private int findRandomMove(Board b) {
+        int i; do { i = random.nextInt(9); } while (!b.isMoveValid(i)); return i;
+    }
+    private int findBestMove(Board b) {
+        int win  = findWinOrBlock(b, this.symbol);           if (win  != -1) return win;
+        char opp = (symbol == 'X') ? 'O' : 'X';
+        int block = findWinOrBlock(b, opp);                  if (block != -1) return block;
+        if (b.isMoveValid(4)) return 4;
+        return -1;
+    }
+    private int findWinOrBlock(Board b, char s) {
+        char[] state = b.getBoardState();
+        for (int i = 0; i < 9; i++) {
+            if (b.isMoveValid(i)) {
+                Board tmp = new Board();
+                for (int j = 0; j < 9; j++) tmp.placeMove(j, state[j]);
+                tmp.placeMove(i, s);
+                if (tmp.checkWinner(s)) return i;
+            }
+        }
+        return -1;
+    }
+}
+
+
+class FileHandler {
+    private static final String SCORE_FILE   = "scores.txt";
+    private static final String HISTORY_FILE = "game_history.log";
+
+    public static Map<String, Integer> loadScores() {
+        Map<String, Integer> m = new HashMap<>();
+        try (BufferedReader r = new BufferedReader(new FileReader(SCORE_FILE))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                String[] p = line.split(":");
+                if (p.length == 2) m.put(p[0], Integer.parseInt(p[1]));
+            }
+        } catch (IOException ignored) {}
+        return m;
+    }
+
+    public static void saveScores(Map<String, Integer> scores) {
+        try (PrintWriter w = new PrintWriter(new FileWriter(SCORE_FILE))) {
+            for (Map.Entry<String, Integer> e : scores.entrySet())
+                w.println(e.getKey() + ":" + e.getValue());
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    public static void logGameHistory(String p1, String p2, String winner) {
+        try (PrintWriter w = new PrintWriter(new FileWriter(HISTORY_FILE, true))) {
+            String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            w.println("[" + time + "] " + p1 + " vs " + p2 + "  →  Winner: " + winner);
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    public static String getHistory() {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader r = new BufferedReader(new FileReader(HISTORY_FILE))) {
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append("\n");
+        } catch (IOException e) { return "No history found."; }
+        return sb.toString();
+    }
+}
